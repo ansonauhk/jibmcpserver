@@ -279,6 +279,53 @@ class JibMcpControllerTest {
     }
 
     @Test
+    void testInitHelmChartTemplate() {
+        // Arrange
+        String projectPath = "/test/project";
+        String chartName = "test-init-chart";
+        
+        HelmChartResult expectedResult = new HelmChartResult(
+            true, "/test/project/test-init-chart", 
+            List.of("Chart.yaml", "values.yaml", "templates/deployment.yaml"), 
+            "Helm chart template initialized successfully using 'helm create'"
+        );
+        when(helmChartService.initHelmChartTemplate(projectPath, chartName)).thenReturn(expectedResult);
+
+        // Act
+        HelmChartResult result = jibMcpController.initHelmChartTemplate(projectPath, chartName);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.isSuccess());
+        assertEquals("/test/project/test-init-chart", result.getChartPath());
+        assertEquals(3, result.getGeneratedFiles().size());
+        assertTrue(result.getMessage().contains("helm create"));
+        verify(helmChartService).initHelmChartTemplate(projectPath, chartName);
+    }
+
+    @Test
+    void testInitHelmChartTemplate_Failure() {
+        // Arrange
+        String projectPath = "/invalid/path";
+        String chartName = "test-chart";
+        
+        HelmChartResult expectedResult = new HelmChartResult(
+            false, null, null, "Project path does not exist: /invalid/path"
+        );
+        when(helmChartService.initHelmChartTemplate(projectPath, chartName)).thenReturn(expectedResult);
+
+        // Act
+        HelmChartResult result = jibMcpController.initHelmChartTemplate(projectPath, chartName);
+
+        // Assert
+        assertNotNull(result);
+        assertFalse(result.isSuccess());
+        assertNull(result.getChartPath());
+        assertTrue(result.getMessage().contains("Project path does not exist"));
+        verify(helmChartService).initHelmChartTemplate(projectPath, chartName);
+    }
+
+    @Test
     void testDeployToK3s() {
         // Arrange
         String projectPath = "/test/project";

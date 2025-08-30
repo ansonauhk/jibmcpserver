@@ -121,6 +121,12 @@ public class JibMcpController {
                                                 appVersionDefault, namespaceDefault);
     }
 
+    @Tool(name = "init_helm_chart_template", 
+          description = "Initialize Helm chart templates using the native 'helm create' command in the user project directory")
+    public HelmChartResult initHelmChartTemplate(String project_path, String chart_name) {
+        return helmChartService.initHelmChartTemplate(project_path, chart_name);
+    }
+
     @Tool(name = "update_helm_values", 
           description = "Update Helm chart values for deployment configuration")
     public JibConfigResult updateHelmValues(String project_path, Map<String, Object> values) {
