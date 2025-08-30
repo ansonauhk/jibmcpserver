@@ -264,6 +264,40 @@ logging:
     com.example.jlibmcpserver: DEBUG
 ```
 
+## CI/CD Pipeline
+
+This project includes a GitHub Actions CI/CD pipeline that automatically builds, tests, and packages the application.
+
+### Pipeline Features
+- **Automated Build**: Builds the project using Gradle with Java 21
+- **Test Execution**: Runs the full test suite including unit and integration tests
+- **JAR Artifacts**: Generates and uploads JAR files for download
+- **Test Reports**: Uploads test results and coverage reports
+- **Caching**: Uses Gradle dependency caching for faster builds
+
+### Triggers
+The pipeline runs on:
+- Push to `main` and `develop` branches
+- Pull requests to `main` branch
+
+### Generated Artifacts
+- **Main JAR**: `jlibmcpserver-0.0.1-SNAPSHOT.jar` (~30MB) - Executable Spring Boot JAR
+- **Plain JAR**: `jlibmcpserver-0.0.1-SNAPSHOT-plain.jar` (~50KB) - Classes only
+- **Test Reports**: HTML test reports and XML results
+
+### Local Development
+To run the same commands locally:
+```bash
+# Build and test (same as CI)
+./gradlew build --no-daemon
+
+# View generated artifacts
+ls -la build/libs/
+
+# Run just tests
+./gradlew test --no-daemon
+```
+
 ## Contributing
 
 ### Development Setup
