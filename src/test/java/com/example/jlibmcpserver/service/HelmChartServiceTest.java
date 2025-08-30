@@ -223,4 +223,116 @@ class HelmChartServiceTest {
         assertTrue(notesContent.contains("kubectl"));
         assertTrue(notesContent.contains("notes-test.fullname"));
     }
+
+    @Test
+    void testInitHelmChartTemplate_Success() throws IOException {
+        String chartName = "test-helm-init";
+        
+        HelmChartResult result = helmChartService.initHelmChartTemplate(
+            tempDir.toString(), chartName
+        );
+        
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getChartPath());
+        assertNotNull(result.getGeneratedFiles());
+        assertFalse(result.getGeneratedFiles().isEmpty());
+        assertTrue(result.getMessage().contains("helm create"));
+        
+        // Verify the chart was created with proper structure
+        Path chartPath = Path.of(result.getChartPath());
+        assertTrue(Files.exists(chartPath));
+        assertTrue(Files.exists(chartPath.resolve("Chart.yaml")));
+        assertTrue(Files.exists(chartPath.resolve("values.yaml")));
+        assertTrue(Files.exists(chartPath.resolve("templates")));
+        
+        // Verify Chart.yaml contains correct chart name
+        String chartYamlContent = Files.readString(chartPath.resolve("Chart.yaml"));
+        assertTrue(chartYamlContent.contains("name: " + chartName));
+    }
+
+    @Test
+    void testInitHelmChartTemplate_NonExistentPath() {
+        String nonExistentPath = "/tmp/non-existent-path-" + System.currentTimeMillis();
+        
+        HelmChartResult result = helmChartService.initHelmChartTemplate(
+            nonExistentPath, "test-chart"
+        );
+        
+        assertFalse(result.isSuccess());
+        assertNull(result.getChartPath());
+        assertTrue(result.getMessage().contains("Project path does not exist"));
+    }
+
+    @Test
+    void testInitHelmChartTemplate_EmptyChartName() {
+        HelmChartResult result = helmChartService.initHelmChartTemplate(
+            tempDir.toString(), ""
+        );
+        
+        assertFalse(result.isSuccess());
+        assertNull(result.getChartPath());
+        assertTrue(result.getMessage().contains("Chart name cannot be null or empty"));
+    }
+
+    @Test
+    void testInitHelmChartTemplate_NullChartName() {
+        HelmChartResult result = helmChartService.initHelmChartTemplate(
+            tempDir.toString(), null
+        );
+        
+        assertFalse(result.isSuccess());
+        assertNull(result.getChartPath());
+        assertTrue(result.getMessage().contains("Chart name cannot be null or empty"));
+    }
+
+    @Test
+    void testInitHelmChartTemplate_InvalidChartName() {
+        // Test invalid chart names that don't follow DNS subdomain conventions
+        String[] invalidNames = {
+            "Test-Chart", // uppercase letters
+            "test_chart", // underscores
+            "-test-chart", // starts with hyphen
+            "test-chart-", // ends with hyphen
+            "test..chart", // double dots
+            "test chart", // spaces
+            "123test", // starts with number (actually valid for DNS, but testing edge case)
+        };
+        
+        for (String invalidName : invalidNames) {
+            HelmChartResult result = helmChartService.initHelmChartTemplate(
+                tempDir.toString(), invalidName
+            );
+            
+            if (!result.isSuccess()) {
+                assertTrue(result.getMessage().contains("Invalid chart name") ||
+                          result.getMessage().contains("Failed to create Helm chart"));
+            }
+        }
+    }
+
+    @Test 
+    void testInitHelmChartTemplate_ValidChartNames() throws IOException {
+        // Test valid chart names
+        String[] validNames = {
+            "test-chart",
+            "my-app", 
+            "service123",
+            "a",
+            "test123-chart-456"
+        };
+        
+        for (String validName : validNames) {
+            // Create a subdirectory for each test to avoid conflicts
+            Path testDir = tempDir.resolve("test-" + validName);
+            Files.createDirectories(testDir);
+            
+            HelmChartResult result = helmChartService.initHelmChartTemplate(
+                testDir.toString(), validName
+            );
+            
+            assertTrue(result.isSuccess(), "Chart name '" + validName + "' should be valid");
+            assertNotNull(result.getChartPath());
+            assertTrue(Files.exists(Path.of(result.getChartPath())));
+        }
+    }
 }

@@ -6,11 +6,14 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 @Service
@@ -455,6 +458,107 @@ public class HelmChartService {
                 // Overwrite or add new value
                 existing.put(key, value);
             }
+        }
+    }
+
+    /**
+     * Initialize a Helm chart template using the native helm create command
+     */
+    public HelmChartResult initHelmChartTemplate(String projectPath, String chartName) {
+        try {
+            Path path = Paths.get(projectPath);
+            if (!Files.exists(path)) {
+                return new HelmChartResult(false, null, null, "Project path does not exist: " + projectPath);
+            }
+
+            if (chartName == null || chartName.trim().isEmpty()) {
+                return new HelmChartResult(false, null, null, "Chart name cannot be null or empty");
+            }
+
+            // Validate chart name (Helm has specific naming requirements)
+            if (!isValidHelmChartName(chartName)) {
+                return new HelmChartResult(false, null, null, 
+                    "Invalid chart name. Chart names must follow DNS subdomain naming conventions");
+            }
+
+            // Execute helm create command in the project directory
+            ProcessResult result = executeCommand(path, "helm", "create", chartName);
+            
+            if (result.exitCode != 0) {
+                return new HelmChartResult(false, null, null, 
+                    "Failed to create Helm chart: " + result.output);
+            }
+
+            // Verify the chart was created successfully
+            Path chartPath = path.resolve(chartName);
+            if (!Files.exists(chartPath) || !Files.exists(chartPath.resolve("Chart.yaml"))) {
+                return new HelmChartResult(false, null, null, 
+                    "Helm chart creation failed - chart directory or Chart.yaml not found");
+            }
+
+            // Collect generated files
+            List<String> generatedFiles = new ArrayList<>();
+            collectGeneratedFiles(chartPath, generatedFiles);
+
+            return new HelmChartResult(true, chartPath.toString(), generatedFiles, 
+                "Helm chart template initialized successfully using 'helm create'");
+
+        } catch (Exception e) {
+            return new HelmChartResult(false, null, null, 
+                "Failed to initialize Helm chart template: " + e.getMessage());
+        }
+    }
+
+    private boolean isValidHelmChartName(String chartName) {
+        // Helm chart names must follow DNS subdomain naming conventions
+        // - contain only lowercase alphanumeric characters or '-'
+        // - start and end with an alphanumeric character
+        // - be no more than 253 characters long
+        if (chartName == null || chartName.length() == 0 || chartName.length() > 253) {
+            return false;
+        }
+        
+        return chartName.matches("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$");
+    }
+
+    private void collectGeneratedFiles(Path chartPath, List<String> generatedFiles) throws IOException {
+        try (Stream<Path> walk = Files.walk(chartPath)) {
+            walk.filter(Files::isRegularFile)
+                .forEach(file -> generatedFiles.add(file.toString()));
+        }
+    }
+
+    private ProcessResult executeCommand(Path workingDirectory, String... command) throws IOException, InterruptedException {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.directory(workingDirectory.toFile());
+        processBuilder.redirectErrorStream(true);
+
+        Process process = processBuilder.start();
+        
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+
+        boolean finished = process.waitFor(30, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("Command timed out: " + String.join(" ", command));
+        }
+
+        return new ProcessResult(process.exitValue(), output.toString());
+    }
+
+    private static class ProcessResult {
+        final int exitCode;
+        final String output;
+
+        ProcessResult(int exitCode, String output) {
+            this.exitCode = exitCode;
+            this.output = output;
         }
     }
 }
